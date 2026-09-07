@@ -47,7 +47,8 @@ def board_from_url(url: str, name: str = "", provenance: str = "discovered") -> 
     if not provider or not re.fullmatch(r"[A-Za-z0-9_.-]+", board):
         return None
     return Company(
-        name=name or board,
+        # A blank-but-truthy scraped name would otherwise strip to nothing.
+        name=name.strip() or board,
         provider=provider,
         board=board,
         region=region,

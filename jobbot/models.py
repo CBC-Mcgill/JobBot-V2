@@ -40,6 +40,11 @@ class Company:
     verified_at: str | None = None
     enabled: bool = True
 
+    def __post_init__(self):
+        # Discovery lifts names from third-party tables. Padding widens the embed's bold
+        # run and defeats the priority-board name match, which compares casefolded names.
+        object.__setattr__(self, "name", self.name.strip())
+
     @property
     def key(self) -> str:
         return f"{self.provider}:{self.region}:{self.board}"
