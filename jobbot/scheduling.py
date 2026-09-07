@@ -4,9 +4,14 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
-from .models import Company
+from .models import MAX_PUBLICATION_AGE, Company
 
-DEFAULT_TIERS = (1800, 7200, 28800, 86400, 259200, 604800, 2592000)
+# A board is only guaranteed to see a listing if it is re-checked while that listing is
+# still fresh.  Half the freshness window leaves room for two attempts, so a late or
+# skipped scan does not silently drop a posting.  Deriving the ceiling from
+# MAX_PUBLICATION_AGE keeps the two policies from drifting apart again.
+MAX_QUIET_INTERVAL = int(MAX_PUBLICATION_AGE.total_seconds()) // 2
+DEFAULT_TIERS = (1800, 7200, 28800, 86400, 259200)
 MAX_PRIORITY_INTERVAL = 7200
 MAX_FAILURE_RETRY = 86400
 
@@ -48,6 +53,12 @@ def after(timestamp: str, seconds: int) -> str:
     return (datetime.fromisoformat(timestamp) + timedelta(seconds=seconds)).isoformat()
 
 
+def bounded_tiers(tiers: tuple[int, ...]) -> tuple[int, ...]:
+    """Drop tiers that would sleep past the freshness window, keeping at least one."""
+    kept = tuple(delay for delay in tiers if delay <= MAX_QUIET_INTERVAL)
+    return kept or tiers[:1]
+
+
 @dataclass(frozen=True)
 class SchedulingPolicy:
     tiers: tuple[int, ...] = DEFAULT_TIERS
@@ -62,6 +73,9 @@ class SchedulingPolicy:
             or any(a >= b for a, b in zip(self.tiers, self.tiers[1:], strict=False))
         ):
             raise ValueError("QUIET_TIERS_SECONDS must be strictly increasing positive integers")
+        # Enforced rather than validated: an unattended bot should keep scanning on a safe
+        # cadence instead of refusing to start over a too-generous interval.
+        object.__setattr__(self, "tiers", bounded_tiers(self.tiers))
         if type(self.priority_interval) is not int or not 0 < self.priority_interval <= 7200:
             raise ValueError("PRIORITY_SCAN_INTERVAL_SECONDS must be between 1 and 7200")
         if type(self.failure_retry) is not int or self.failure_retry <= 0:
