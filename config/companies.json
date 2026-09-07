@@ -1,38 +1,5 @@
 [
   {
-    "name": " Cottingham & Butler",
-    "provider": "greenhouse",
-    "board": "cottinghambutlerinsuranceservicesinc",
-    "region": "global",
-    "career_url": "https://boards.greenhouse.io/cottinghambutlerinsuranceservicesinc/jobs/4407035008",
-    "overrides": null,
-    "provenance": "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json",
-    "verified_at": "2026-09-06T22:26:19.236581+00:00",
-    "enabled": true
-  },
-  {
-    "name": " impact.com ",
-    "provider": "greenhouse",
-    "board": "impact",
-    "region": "global",
-    "career_url": "https://job-boards.greenhouse.io/impact/jobs/8509171002",
-    "overrides": null,
-    "provenance": "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json",
-    "verified_at": "2026-09-06T22:27:35.670617+00:00",
-    "enabled": true
-  },
-  {
-    "name": " Limble CMMS",
-    "provider": "ashby",
-    "board": "limble",
-    "region": "global",
-    "career_url": "https://jobs.ashbyhq.com/limble/57781e55-092f-4797-b369-9bbb4e684483/application?embed=true",
-    "overrides": null,
-    "provenance": "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json",
-    "verified_at": "2026-09-06T22:28:44.728763+00:00",
-    "enabled": true
-  },
-  {
     "name": "1-800 Contacts",
     "provider": "greenhouse",
     "board": "1800contacts",
@@ -4246,6 +4213,17 @@
     "enabled": true
   },
   {
+    "name": "Cottingham & Butler",
+    "provider": "greenhouse",
+    "board": "cottinghambutlerinsuranceservicesinc",
+    "region": "global",
+    "career_url": "https://boards.greenhouse.io/cottinghambutlerinsuranceservicesinc/jobs/4407035008",
+    "overrides": null,
+    "provenance": "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json",
+    "verified_at": "2026-09-06T22:26:19.236581+00:00",
+    "enabled": true
+  },
+  {
     "name": "Coupa Software",
     "provider": "lever",
     "board": "coupa",
@@ -4290,7 +4268,7 @@
     "enabled": true
   },
   {
-    "name": "Creatify Lab ",
+    "name": "Creatify Lab",
     "provider": "ashby",
     "board": "creatify",
     "region": "global",
@@ -7579,7 +7557,7 @@
     "enabled": true
   },
   {
-    "name": "Hankook Tire America ",
+    "name": "Hankook Tire America",
     "provider": "greenhouse",
     "board": "hankooktireamericacorp",
     "region": "global",
@@ -8335,6 +8313,17 @@
     "overrides": null,
     "provenance": "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/.github/scripts/listings.json",
     "verified_at": "2026-09-06T22:29:40.320875+00:00",
+    "enabled": true
+  },
+  {
+    "name": "impact.com",
+    "provider": "greenhouse",
+    "board": "impact",
+    "region": "global",
+    "career_url": "https://job-boards.greenhouse.io/impact/jobs/8509171002",
+    "overrides": null,
+    "provenance": "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json",
+    "verified_at": "2026-09-06T22:27:35.670617+00:00",
     "enabled": true
   },
   {
@@ -9699,6 +9688,17 @@
     "overrides": null,
     "provenance": "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json",
     "verified_at": "2026-09-06T22:28:57.924346+00:00",
+    "enabled": true
+  },
+  {
+    "name": "Limble CMMS",
+    "provider": "ashby",
+    "board": "limble",
+    "region": "global",
+    "career_url": "https://jobs.ashbyhq.com/limble/57781e55-092f-4797-b369-9bbb4e684483/application?embed=true",
+    "overrides": null,
+    "provenance": "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json",
+    "verified_at": "2026-09-06T22:28:44.728763+00:00",
     "enabled": true
   },
   {
@@ -15939,7 +15939,7 @@
     "enabled": true
   },
   {
-    "name": "SuccessKPI ",
+    "name": "SuccessKPI",
     "provider": "greenhouse",
     "board": "successkpiinc",
     "region": "global",
@@ -16302,7 +16302,7 @@
     "enabled": true
   },
   {
-    "name": "TEGNA ",
+    "name": "TEGNA",
     "provider": "greenhouse",
     "board": "tegnainc",
     "region": "global",
@@ -16401,7 +16401,7 @@
     "enabled": true
   },
   {
-    "name": "Tempo ",
+    "name": "Tempo",
     "provider": "ashby",
     "board": "tempo-io",
     "region": "global",
@@ -16577,7 +16577,7 @@
     "enabled": true
   },
   {
-    "name": "The Health Management Academy ",
+    "name": "The Health Management Academy",
     "provider": "greenhouse",
     "board": "thehealthmanagementacademy",
     "region": "global",
@@ -17699,7 +17699,7 @@
     "enabled": true
   },
   {
-    "name": "Vantage ",
+    "name": "Vantage",
     "provider": "ashby",
     "board": "vantage",
     "region": "global",

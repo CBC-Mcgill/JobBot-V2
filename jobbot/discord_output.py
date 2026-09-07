@@ -15,7 +15,8 @@ ICONS = {"SWE": "💻", "Quant": "📈", "AI/ML": "🧠"}
 
 
 def clean(text: str, limit: int) -> str:
-    text = discord.utils.escape_mentions(discord.utils.escape_markdown(str(text)))
+    # Payloads are snapshotted at queue time, so normalising the model is not enough.
+    text = discord.utils.escape_mentions(discord.utils.escape_markdown(str(text).strip()))
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 

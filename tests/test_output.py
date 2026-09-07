@@ -1,9 +1,12 @@
 import json
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
 from jobbot.discord_output import make_message
+from jobbot.discovery import board_from_url
+from jobbot.models import Company
 
 
 @pytest.mark.parametrize(
@@ -77,3 +80,38 @@ def test_absent_compensation_keeps_embed_compact(job, settings):
     embed = message["embed"]
     assert "Not listed" not in embed.description
     assert not embed.fields
+
+
+def heading_for(job, settings, company):
+    delivery = {
+        "id": "abc",
+        "kind": "job",
+        "route": "SWE_New Grad",
+        "payload": json.dumps(replace(job, company=company).to_dict()),
+    }
+    return make_message(delivery, settings)["embed"].description.split("\n")[0]
+
+
+def test_padded_company_name_is_normalised(job, settings):
+    # Discovery lifts names from third-party listing tables, so they arrive padded.
+    assert Company("  Cottingham & Butler ", "greenhouse", "x").name == "Cottingham & Butler"
+    assert heading_for(job, settings, "  Cottingham & Butler ") == "**Cottingham & Butler**"
+
+
+def test_padding_in_a_payload_queued_earlier_is_still_cleaned(job, settings):
+    """A delivery snapshots job.company when it is queued, so normalising Company cannot
+    reach rows already in the outbox. The render boundary has to strip too."""
+    assert heading_for(job, settings, "TEGNA ") == "**TEGNA**"
+
+
+def test_blank_scraped_name_falls_back_to_the_board(job, settings):
+    """A whitespace-only name is truthy, so it would skip the board fallback and then
+    strip to nothing. Empty is the one value that renders as four literal asterisks."""
+    assert board_from_url("https://jobs.ashbyhq.com/acme", name="   ").name == "acme"
+    assert heading_for(job, settings, "") == "****"
+
+
+def test_registry_names_are_already_normalised():
+    path = Path(__file__).resolve().parent.parent / "config" / "companies.json"
+    registry = json.loads(path.read_text())
+    assert [c["name"] for c in registry if c["name"] != c["name"].strip()] == []

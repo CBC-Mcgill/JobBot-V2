@@ -149,7 +149,7 @@ def read_registry(path: Path) -> list[Company]:
         if company.provider not in {"ashby", "greenhouse", "lever", "jsonld"}:
             raise ValueError(f"Unsupported provider for {company.name}: {company.provider}")
         if not company.board or not company.name or company.region not in {"global", "eu"}:
-            raise ValueError(f"Invalid company: {company.name}")
+            raise ValueError(f"Invalid company: {company.name or company.key!r}")
         if company.key in seen:
             raise ValueError(f"Duplicate board: {company.key}")
         seen.add(company.key)
