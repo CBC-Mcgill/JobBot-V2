@@ -7,9 +7,10 @@ from datetime import datetime, timedelta
 from .models import MAX_PUBLICATION_AGE, Company
 
 # A board is only guaranteed to see a listing if it is re-checked while that listing is
-# still fresh.  Half the freshness window leaves room for two attempts, so a late or
-# skipped scan does not silently drop a posting.  Deriving the ceiling from
-# MAX_PUBLICATION_AGE keeps the two policies from drifting apart again.
+# still fresh, so no tier may outlast the freshness window.  Half the window is the
+# ceiling; the shipped ladder stops a day below it, which is the slack that absorbs a
+# late or skipped scan.  A tier set exactly at the ceiling has no such slack.  Deriving
+# the ceiling from MAX_PUBLICATION_AGE keeps the two policies from drifting apart again.
 MAX_QUIET_INTERVAL = int(MAX_PUBLICATION_AGE.total_seconds()) // 2
 DEFAULT_TIERS = (1800, 7200, 28800, 86400, 259200)
 MAX_PRIORITY_INTERVAL = 7200
@@ -54,9 +55,14 @@ def after(timestamp: str, seconds: int) -> str:
 
 
 def bounded_tiers(tiers: tuple[int, ...]) -> tuple[int, ...]:
-    """Drop tiers that would sleep past the freshness window, keeping at least one."""
+    """Drop tiers that would sleep past the freshness window, keeping at least one.
+
+    The surviving ladder is never empty and never exceeds the ceiling: when every
+    configured tier is too generous the shortest one is lowered to the ceiling rather
+    than kept as-is, which would leave the board asleep past its own listings.
+    """
     kept = tuple(delay for delay in tiers if delay <= MAX_QUIET_INTERVAL)
-    return kept or tiers[:1]
+    return kept or (min(tiers[0], MAX_QUIET_INTERVAL),)
 
 
 @dataclass(frozen=True)
