@@ -15,6 +15,7 @@ from .discord_output import DiscordPublisher
 from .discovery import Discovery
 from .http import PublicHTTP
 from .providers import Providers
+from .scheduling import MAX_QUIET_INTERVAL
 from .service import Service
 from .store import Store
 
@@ -148,10 +149,19 @@ def main():
             sources = json.loads(settings.discovery_path.read_text())
             if not isinstance(sources, list) or not all(isinstance(s, str) for s in sources):
                 raise ValueError("Discovery sources must be a JSON list of URLs")
+            tiers = settings.scheduling_policy.tiers
             print(
                 f"Configuration valid: mode={settings.mode}, boards={len(companies)}, "
                 f"max_send={settings.max_send}, interval={settings.scan_interval}s"
             )
+            print(f"Quiet tiers in effect: {','.join(map(str, tiers))}")
+            if tiers != settings.quiet_tiers:
+                # Silently shortening the ladder would leave no way to notice.
+                print(
+                    f"  note: QUIET_TIERS_SECONDS={','.join(map(str, settings.quiet_tiers))} "
+                    f"exceeds the {MAX_QUIET_INTERVAL}s freshness ceiling; "
+                    "tiers above it were dropped."
+                )
             return
         # SQLite's backup API and WAL reads work safely while the main process runs.
         if args.command in {"backup", "status"}:

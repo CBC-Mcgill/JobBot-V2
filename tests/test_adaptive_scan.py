@@ -10,7 +10,7 @@ import pytest
 from jobbot.classify import classify
 from jobbot.discovery import Discovery
 from jobbot.models import Snapshot
-from jobbot.scheduling import DEFAULT_TIERS, after
+from jobbot.scheduling import DEFAULT_TIERS, SchedulingPolicy, after
 from jobbot.service import Service
 from jobbot.store import VACUUM_ROWS, Store
 
@@ -53,7 +53,7 @@ async def test_all_quiet_tiers_new_unrelated_and_qualifying_jobs(
     unrelated = replace(job, title="Marketing Intern")
     providers.fetch_snapshot.return_value = Snapshot([unrelated])
     await service.scan()
-    assert store.board_state(company.key)["scan_tier"] == len(DEFAULT_TIERS) - 1
+    assert store.board_state(company.key)["scan_tier"] == len(SchedulingPolicy().tiers) - 1
     assert publisher.messages == []
     clock.set(store.board_state(company.key)["next_scan_at"])
     providers.fetch_snapshot.return_value = Snapshot([unrelated, another_job(job, 2)])
@@ -248,7 +248,7 @@ def test_status_matches_due_queue_and_excludes_disabled(store, company, clock):
     assert status["failed_boards"] == 1
     assert status["next_board"]["key"] == company.key
     assert [t["boards"] for t in status["boards_by_tier"]] == [2, 1] + [0] * (
-        len(DEFAULT_TIERS) - 2
+        len(SchedulingPolicy().tiers) - 2
     )
     assert store.scheduling_status(adaptive=False)["due_boards"] == 3
     clock.advance(1800)
@@ -430,3 +430,30 @@ def test_retiring_one_scan_row_does_not_rewrite_the_file(tmp_path, company, cloc
     assert database.prune(days=1) == 1
     assert database.connection.execute("PRAGMA freelist_count").fetchone()[0] >= 0
     database.close()
+async def test_shortened_ladder_wakes_boards_parked_beyond_the_new_ceiling(
+    settings, store, company, clock
+):
+    """A board parked at the old 30-day tier must not keep sleeping past the freshness
+    window after the ladder shrinks; the old policy's future scan date is pulled back."""
+    store.upsert_company(company)
+    parked = clock.now()
+    with store.connection:
+        store.connection.execute(
+            "UPDATE companies SET scan_tier=6,next_scan_at=?,last_snapshot_at=?",
+            (after(parked, 2592000), parked),
+        )
+    store.configure_scheduling(SchedulingPolicy())
+    state = store.board_state(company.key)
+    assert state["scan_tier"] == len(SchedulingPolicy().tiers) - 1
+    assert state["next_scan_at"] == after(parked, SchedulingPolicy().tiers[-1])
+    clock.set(state["next_scan_at"])
+    assert [c.key for c in store.due_companies()] == [company.key]
+
+
+async def test_reconfiguring_leaves_failure_backoff_alone(settings, store, company, clock):
+    # Failure retry is a separate policy; a ladder change must not shorten it.
+    store.upsert_company(company)
+    store.company_error(company.key, "TimeoutError")
+    backoff = store.board_state(company.key)["next_scan_at"]
+    store.configure_scheduling(SchedulingPolicy())
+    assert store.board_state(company.key)["next_scan_at"] == backoff

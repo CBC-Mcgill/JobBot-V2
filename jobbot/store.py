@@ -137,13 +137,21 @@ class Store:
             for row in self.connection.execute("SELECT * FROM companies").fetchall():
                 priority = policy.priority(Company(**json.loads(row["data"])))
                 tier = policy.cap_tier(row["scan_tier"], priority)
-                if priority == row["priority"] and tier == row["scan_tier"]:
-                    continue
                 next_scan = row["next_scan_at"]
-                if priority and not row["consecutive_failures"]:
+                # A board parked far in the future under a longer ladder must be pulled
+                # back, or it keeps sleeping past the freshness window the new ladder
+                # exists to respect.  Failure backoff is deliberately left alone.
+                if not row["consecutive_failures"]:
+                    interval = min(policy.tiers[tier], priority) if priority else policy.tiers[tier]
                     next_scan = min(
-                        next_scan, after(row["last_snapshot_at"] or timestamp, priority)
+                        next_scan, after(row["last_snapshot_at"] or timestamp, interval)
                     )
+                if (priority, tier, next_scan) == (
+                    row["priority"],
+                    row["scan_tier"],
+                    row["next_scan_at"],
+                ):
+                    continue
                 self.connection.execute(
                     "UPDATE companies SET priority=?,scan_tier=?,next_scan_at=? WHERE key=?",
                     (priority, tier, next_scan, row["key"]),

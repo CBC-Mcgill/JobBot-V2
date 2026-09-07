@@ -27,7 +27,13 @@ def test_no_tier_outlives_the_publication_freshness_window():
     """A board slept past this window would classify its own new listings as stale,
     which never counts as qualifying, so its tier would never reset.  Regression guard."""
     window = MAX_PUBLICATION_AGE.total_seconds()
-    for tiers in (DEFAULT_TIERS, (1800, 604800, 2592000), (86400, 999999999)):
+    for tiers in (
+        DEFAULT_TIERS,
+        (1800, 604800, 2592000),
+        (86400, 999999999),
+        (2592000,),  # every tier over the ceiling: the fallback path
+        (604800, 2592000),
+    ):
         policy = SchedulingPolicy(tiers=tiers)
         assert policy.tiers, "at least one tier must survive the ceiling"
         assert max(policy.tiers) <= MAX_QUIET_INTERVAL < window
@@ -41,8 +47,11 @@ def test_over_generous_tiers_are_dropped_not_rejected():
     # An unattended bot keeps scanning on a safe cadence rather than refusing to start.
     assert bounded_tiers((1800, 604800, 2592000)) == (1800,)
     assert bounded_tiers(DEFAULT_TIERS) == DEFAULT_TIERS
-    assert bounded_tiers((2592000,)) == (2592000,), "never return an empty ladder"
     assert SchedulingPolicy(tiers=(1800, 7200, 2592000)).tiers == (1800, 7200)
+    # When nothing survives the ceiling the ladder is lowered, never kept as-is:
+    # returning the raw first tier here would re-open the blackout this guards.
+    assert bounded_tiers((2592000,)) == (MAX_QUIET_INTERVAL,)
+    assert bounded_tiers((604800, 2592000)) == (MAX_QUIET_INTERVAL,)
 
 
 @pytest.mark.parametrize("priority", [1800, 7200])
