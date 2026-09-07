@@ -2,6 +2,7 @@ import asyncio
 import json
 import sqlite3
 from dataclasses import replace
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, Mock
 
 import pytest
@@ -11,6 +12,7 @@ from jobbot.discovery import Discovery
 from jobbot.models import Snapshot
 from jobbot.scheduling import DEFAULT_TIERS, after
 from jobbot.service import Service
+from jobbot.store import VACUUM_ROWS, Store
 
 from .conftest import another_job
 from .test_delivery import Publisher, make_service
@@ -89,7 +91,7 @@ async def test_failure_preserves_snapshot_jobs_and_quiet_tier(settings, store, c
             "last_qualifying_job_at",
         ):
             assert state[key] == previous[key]
-        assert store.snapshot_jobs(company.key) == [job]
+        assert store.snapshot_jobs(company.key) == [replace(job, description="")]
     clock.set(state["next_scan_at"])
     providers.fetch_snapshot.side_effect = None
     providers.fetch_snapshot.return_value = Snapshot([])
@@ -120,7 +122,7 @@ async def test_304_retains_jobs_and_validators_and_mode_separation(
     for key in ("last_snapshot_hash", "etag", "last_modified", "last_qualifying_job_at"):
         assert state[key] == initial[key]
     assert state["last_snapshot_at"] == clock.now()
-    assert store.snapshot_jobs(company.key) == [job]
+    assert store.snapshot_jobs(company.key) == [replace(job, description="")]
     clock.set(state["next_scan_at"])
     providers.fetch_snapshot.return_value = Snapshot([job])
     await service.scan()
@@ -287,3 +289,142 @@ async def test_invalid_provider_response_preserves_cached_snapshot(settings, sto
         assert store.snapshot_jobs(company.key) == jobs
     finally:
         await providers.http.close()
+
+
+async def test_descriptions_are_not_persisted(settings, store, company, job, clock):
+    service, _, _ = make_service(settings, store, [job])
+    await service.scan()
+    stored = store.connection.execute(
+        "SELECT data FROM jobs WHERE company_key=?", (company.key,)
+    ).fetchone()[0]
+    assert job.description not in stored
+    assert json.loads(stored)["description"] == ""
+    queued = store.connection.execute("SELECT payload FROM deliveries").fetchone()
+    assert queued is None or job.description not in queued[0]
+
+
+async def test_304_keeps_a_verdict_that_only_the_description_earned(
+    settings, store, company, job, clock
+):
+    """Eligibility won on description text must survive a 304, which has no description
+    to re-read. The recorded verdict is replayed instead of being derived again."""
+    described = replace(
+        job,
+        title="Software Engineer",
+        description="We are seeking new graduates for this role.",
+    )
+    service, _, providers = make_service(settings, store, [described])
+    await service.scan()
+    assert store.board_state(company.key)["last_snapshot_hash"]
+    route = store.connection.execute("SELECT route FROM jobs").fetchone()[0]
+    assert route == "SWE_New Grad"
+
+    clock.set(store.board_state(company.key)["next_scan_at"])
+    providers.fetch_snapshot.return_value = Snapshot(None, '"v1"', None)
+    await service.scan()
+    assert store.connection.execute("SELECT route FROM jobs").fetchone()[0] == route
+
+
+async def test_prune_drops_history_but_never_the_dedup_record(settings, store, company, job, clock):
+    service, _, providers = make_service(settings, store, [job])
+    await service.scan()
+    providers.fetch_snapshot.return_value = Snapshot([])
+    clock.set(store.board_state(company.key)["next_scan_at"])
+    await service.scan()
+
+    def count(table, where="1"):
+        return store.connection.execute(f"SELECT COUNT(*) FROM {table} WHERE {where}").fetchone()[0]
+
+    assert (count("jobs"), count("deliveries", "kind='job'")) == (1, 1)
+    assert store.prune(days=0) >= 1
+    assert count("jobs") == 0
+    assert count("deliveries", "kind='job'") == 1, "a sent delivery is what stops a repost"
+    # The scan that just ran is not yet past the cutoff; the earlier one is.
+    assert count("scans") == 1
+
+
+async def test_prune_keeps_jobs_still_on_the_board(settings, store, company, job, clock):
+    service, _, _ = make_service(settings, store, [job])
+    await service.scan()
+    store.prune(days=0)
+    assert store.snapshot_jobs(company.key) == [replace(job, description="")]
+
+
+async def test_304_reapplies_company_exclusion(settings, store, company, job, clock):
+    """A board that never changes answers 304 forever, so a cached verdict must not
+    outlive the registry. Excluding a company has to take effect on the next scan."""
+    service, publisher, providers = make_service(settings, store, [job])
+    await service.scan()
+    assert [m["kind"] for m, _ in publisher.messages].count("job") == 1
+
+    excluded = replace(company, overrides={"exclude": True})
+    settings.registry_path.write_text(json.dumps([excluded.to_dict()]))
+    service._registry_signature = None
+    providers.fetch_snapshot.return_value = Snapshot(None, '"v1"', None)
+    clock.set(store.board_state(company.key)["next_scan_at"])
+    await service.scan()
+
+    assert store.connection.execute("SELECT route FROM jobs").fetchone()[0] is None
+    assert store.connection.execute(
+        "SELECT status FROM deliveries WHERE kind='job'"
+    ).fetchone()[0] == "sent"
+
+
+async def test_304_reapplies_staleness_instead_of_requeuing_forever(
+    settings, store, company, job, clock
+):
+    """A cached route must not resurrect a delivery that went stale, or the zombie
+    occupies a MAX_SEND slot on every later scan and starves fresh jobs."""
+    # is_stale reads the wall clock, not the fixture clock, so age the stored row.
+    fresh = replace(job, published_at=datetime.now(UTC).isoformat())
+    service, _, providers = make_service(settings, store, [fresh])
+    await service.scan()
+    aged = json.dumps({**fresh.stored(), "published_at": "2020-01-01T00:00:00+00:00"})
+    with store.connection:
+        store.connection.execute("UPDATE deliveries SET status='pending' WHERE kind='job'")
+        store.connection.execute("UPDATE jobs SET data=?", (aged,))
+
+    clock.set(store.board_state(company.key)["next_scan_at"])
+    providers.fetch_snapshot.return_value = Snapshot(None, '"v1"', None)
+    await service.scan()
+    # A surviving route is what resurrects the delivery to pending on every later 304,
+    # so it keeps consuming a MAX_SEND slot ahead of fresher jobs without ever posting.
+    assert store.connection.execute("SELECT route FROM jobs").fetchone()[0] is None
+    assert store.connection.execute(
+        "SELECT status FROM deliveries WHERE kind='job'"
+    ).fetchone()[0] == "cancelled"
+    assert store.backlog(settings.mode) == 0
+
+
+def test_prune_returns_space_to_the_uploaded_file(tmp_path, company, clock):
+    """Deleting rows alone does not shrink the file that gets uploaded to Drive."""
+    path = tmp_path / "vacuum.sqlite3"
+    database = Store(path)
+    database.upsert_company(company)
+    with database.connection:
+        database.connection.executemany(
+            "INSERT INTO jobs VALUES(?,?,?,?,'[]',NULL,0,'2000-01-01','2000-01-01')",
+            [(str(i), company.key, str(i), "x" * 4000) for i in range(VACUUM_ROWS + 1)],
+        )
+    database.connection.execute("VACUUM")
+    database.close()
+    before = path.stat().st_size
+
+    database = Store(path)
+    assert database.prune(days=1) == VACUUM_ROWS + 1
+    database.close()
+    assert path.stat().st_size < before / 2
+
+
+def test_retiring_one_scan_row_does_not_rewrite_the_file(tmp_path, company, clock):
+    # The steady state is roughly one scan row per scan. Vacuuming for that would
+    # rewrite the whole database every 30 minutes.
+    database = Store(tmp_path / "quiet.sqlite3")
+    with database.connection:
+        database.connection.execute(
+            "INSERT INTO scans(id,mode,started_at,status) VALUES('x','debug',?,'finished')",
+            ("2000-01-01T00:00:00+00:00",),
+        )
+    assert database.prune(days=1) == 1
+    assert database.connection.execute("PRAGMA freelist_count").fetchone()[0] >= 0
+    database.close()
