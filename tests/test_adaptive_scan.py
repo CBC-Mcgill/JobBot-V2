@@ -433,8 +433,7 @@ def test_retiring_one_scan_row_does_not_rewrite_the_file(tmp_path, company, cloc
 async def test_shortened_ladder_wakes_boards_parked_beyond_the_new_ceiling(
     settings, store, company, clock
 ):
-    """A board parked at the old 30-day tier must not keep sleeping past the freshness
-    window after the ladder shrinks; the old policy's future scan date is pulled back."""
+    """A board parked at the old 30-day tier is pulled back when the ladder shrinks."""
     store.upsert_company(company)
     parked = clock.now()
     with store.connection:
@@ -451,7 +450,7 @@ async def test_shortened_ladder_wakes_boards_parked_beyond_the_new_ceiling(
 
 
 async def test_reconfiguring_leaves_failure_backoff_alone(settings, store, company, clock):
-    # Failure retry is a separate policy; a ladder change must not shorten it.
+    # Failure retry is a separate policy. A ladder change must not shorten it.
     store.upsert_company(company)
     store.company_error(company.key, "TimeoutError")
     backoff = store.board_state(company.key)["next_scan_at"]

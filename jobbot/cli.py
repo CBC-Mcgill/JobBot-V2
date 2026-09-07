@@ -159,7 +159,7 @@ def main():
                 # Silently shortening the ladder would leave no way to notice.
                 print(
                     f"  note: QUIET_TIERS_SECONDS={','.join(map(str, settings.quiet_tiers))} "
-                    f"exceeds the {MAX_QUIET_INTERVAL}s freshness ceiling; "
+                    f"exceeds the {MAX_QUIET_INTERVAL}s freshness ceiling. "
                     "tiers above it were dropped."
                 )
             return

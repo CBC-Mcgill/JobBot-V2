@@ -138,9 +138,8 @@ class Store:
                 priority = policy.priority(Company(**json.loads(row["data"])))
                 tier = policy.cap_tier(row["scan_tier"], priority)
                 next_scan = row["next_scan_at"]
-                # A board parked far in the future under a longer ladder must be pulled
-                # back, or it keeps sleeping past the freshness window the new ladder
-                # exists to respect.  Failure backoff is deliberately left alone.
+                # A shorter ladder must wake boards parked under the old one. Failure
+                # backoff is a separate policy and is left alone.
                 if not row["consecutive_failures"]:
                     interval = min(policy.tiers[tier], priority) if priority else policy.tiers[tier]
                     next_scan = min(

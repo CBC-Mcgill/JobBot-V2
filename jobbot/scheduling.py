@@ -6,11 +6,8 @@ from datetime import datetime, timedelta
 
 from .models import MAX_PUBLICATION_AGE, Company
 
-# A board is only guaranteed to see a listing if it is re-checked while that listing is
-# still fresh, so no tier may outlast the freshness window.  Half the window is the
-# ceiling; the shipped ladder stops a day below it, which is the slack that absorbs a
-# late or skipped scan.  A tier set exactly at the ceiling has no such slack.  Deriving
-# the ceiling from MAX_PUBLICATION_AGE keeps the two policies from drifting apart again.
+# Half the freshness window, so a listing gets two chances to be seen. A tier set at the
+# ceiling itself has no slack for a late scan, which is why the shipped ladder stops below it.
 MAX_QUIET_INTERVAL = int(MAX_PUBLICATION_AGE.total_seconds()) // 2
 DEFAULT_TIERS = (1800, 7200, 28800, 86400, 259200)
 MAX_PRIORITY_INTERVAL = 7200
@@ -55,12 +52,8 @@ def after(timestamp: str, seconds: int) -> str:
 
 
 def bounded_tiers(tiers: tuple[int, ...]) -> tuple[int, ...]:
-    """Drop tiers that would sleep past the freshness window, keeping at least one.
-
-    The surviving ladder is never empty and never exceeds the ceiling: when every
-    configured tier is too generous the shortest one is lowered to the ceiling rather
-    than kept as-is, which would leave the board asleep past its own listings.
-    """
+    """Drop tiers that sleep past the freshness window, lowering the last survivor."""
+    # Returning the raw shortest tier here would leave the board asleep past its listings.
     kept = tuple(delay for delay in tiers if delay <= MAX_QUIET_INTERVAL)
     return kept or (min(tiers[0], MAX_QUIET_INTERVAL),)
 
@@ -79,8 +72,7 @@ class SchedulingPolicy:
             or any(a >= b for a, b in zip(self.tiers, self.tiers[1:], strict=False))
         ):
             raise ValueError("QUIET_TIERS_SECONDS must be strictly increasing positive integers")
-        # Enforced rather than validated: an unattended bot should keep scanning on a safe
-        # cadence instead of refusing to start over a too-generous interval.
+        # Enforced, not validated: a cron bot should keep scanning, not refuse to start.
         object.__setattr__(self, "tiers", bounded_tiers(self.tiers))
         if type(self.priority_interval) is not int or not 0 < self.priority_interval <= 7200:
             raise ValueError("PRIORITY_SCAN_INTERVAL_SECONDS must be between 1 and 7200")
