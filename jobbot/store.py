@@ -1,12 +1,16 @@
 import json
 import sqlite3
 import uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from .models import Classification, Company, Job, Snapshot, now
 from .scheduling import SchedulingPolicy, after
 
 SCHEMA_VERSION = 2
+
+# Long enough that a seasonal role vanishing and returning is not treated as new.
+RETENTION_DAYS = 90
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS companies (
@@ -160,12 +164,30 @@ class Store:
         return dict(row)
 
     def snapshot_jobs(self, key: str) -> list[Job]:
-        return [
-            Job(**json.loads(row[0]))
-            for row in self.connection.execute(
-                "SELECT data FROM jobs WHERE company_key=? AND active=1 ORDER BY key", (key,)
+        return [job for job, _ in self.snapshot_results(key)]
+
+    def snapshot_results(self, key: str) -> list[tuple[Job, Classification]]:
+        """Replay a cached snapshot with the verdict recorded when it was first parsed.
+
+        An HTTP 304 means nothing changed, so re-deriving the verdict would only risk
+        disagreeing with it. Descriptions are not persisted and cannot be re-read anyway.
+        """
+        results = []
+        for row in self.connection.execute(
+            "SELECT data,route,classification FROM jobs WHERE company_key=? AND active=1 "
+            "ORDER BY key",
+            (key,),
+        ):
+            kind, _, experience = (row["route"] or "").partition("_")
+            results.append(
+                (
+                    Job(**json.loads(row["data"])),
+                    Classification(
+                        kind or None, experience or None, tuple(json.loads(row["classification"]))
+                    ),
+                )
             )
-        ]
+        return results
 
     def scheduling_status(self, *, adaptive: bool = True, timestamp: str | None = None) -> dict:
         timestamp = timestamp or now()
@@ -274,7 +296,7 @@ class Store:
                         job.key,
                         company.key,
                         job.identity,
-                        json.dumps(job.to_dict()),
+                        json.dumps(job.stored()),
                         json.dumps(classification.reasons),
                         route,
                         timestamp,
@@ -288,7 +310,7 @@ class Store:
                     """UPDATE deliveries SET route=?,payload=?,status='pending'
                     WHERE mode=? AND job_key=? AND kind='job'
                     AND status IN ('pending','cancelled')""",
-                    (route, json.dumps(job.to_dict()), mode, job.key),
+                    (route, json.dumps(job.stored()), mode, job.key),
                 )
             self.connection.execute(
                 """UPDATE deliveries SET status='cancelled' WHERE kind='job' AND status='pending'
@@ -341,7 +363,7 @@ class Store:
                     job.identity,
                     job.key,
                     route,
-                    json.dumps(job.to_dict()),
+                    json.dumps(job.stored()),
                     timestamp,
                 ),
             )
@@ -481,6 +503,25 @@ class Store:
             WHERE mode=? AND kind='job' AND status IN ('pending','sending')""",
             (mode,),
         ).fetchone()[0]
+
+    def prune(self, days: int = RETENTION_DAYS) -> int:
+        """Drop history that no longer affects behaviour, then reclaim the file space.
+
+        Deliveries are never pruned: a sent row is what stops a job being posted twice
+        if it reappears on a board, so it outlives the job row it points at.
+        """
+        cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+        with self.connection:
+            removed = self.connection.execute(
+                "DELETE FROM jobs WHERE active=0 AND last_seen<?", (cutoff,)
+            ).rowcount
+            removed += self.connection.execute(
+                "DELETE FROM scans WHERE status='finished' AND started_at<?", (cutoff,)
+            ).rowcount
+        if removed:
+            # Freed pages are only returned to the file, and so to the Drive upload, by VACUUM.
+            self.connection.execute("VACUUM")
+        return removed
 
     # Backup ---------------------------------------------------------------
 

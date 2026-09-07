@@ -89,7 +89,7 @@ async def test_failure_preserves_snapshot_jobs_and_quiet_tier(settings, store, c
             "last_qualifying_job_at",
         ):
             assert state[key] == previous[key]
-        assert store.snapshot_jobs(company.key) == [job]
+        assert store.snapshot_jobs(company.key) == [replace(job, description="")]
     clock.set(state["next_scan_at"])
     providers.fetch_snapshot.side_effect = None
     providers.fetch_snapshot.return_value = Snapshot([])
@@ -120,7 +120,7 @@ async def test_304_retains_jobs_and_validators_and_mode_separation(
     for key in ("last_snapshot_hash", "etag", "last_modified", "last_qualifying_job_at"):
         assert state[key] == initial[key]
     assert state["last_snapshot_at"] == clock.now()
-    assert store.snapshot_jobs(company.key) == [job]
+    assert store.snapshot_jobs(company.key) == [replace(job, description="")]
     clock.set(state["next_scan_at"])
     providers.fetch_snapshot.return_value = Snapshot([job])
     await service.scan()
@@ -287,3 +287,61 @@ async def test_invalid_provider_response_preserves_cached_snapshot(settings, sto
         assert store.snapshot_jobs(company.key) == jobs
     finally:
         await providers.http.close()
+
+
+async def test_descriptions_are_not_persisted(settings, store, company, job, clock):
+    service, _, _ = make_service(settings, store, [job])
+    await service.scan()
+    stored = store.connection.execute(
+        "SELECT data FROM jobs WHERE company_key=?", (company.key,)
+    ).fetchone()[0]
+    assert job.description not in stored
+    assert json.loads(stored)["description"] == ""
+    queued = store.connection.execute("SELECT payload FROM deliveries").fetchone()
+    assert queued is None or job.description not in queued[0]
+
+
+async def test_304_keeps_a_verdict_that_only_the_description_earned(
+    settings, store, company, job, clock
+):
+    """Eligibility won on description text must survive a 304, which has no description
+    to re-read. The recorded verdict is replayed instead of being derived again."""
+    described = replace(
+        job,
+        title="Software Engineer",
+        description="We are seeking new graduates for this role.",
+    )
+    service, _, providers = make_service(settings, store, [described])
+    await service.scan()
+    assert store.board_state(company.key)["last_snapshot_hash"]
+    route = store.connection.execute("SELECT route FROM jobs").fetchone()[0]
+    assert route == "SWE_New Grad"
+
+    clock.set(store.board_state(company.key)["next_scan_at"])
+    providers.fetch_snapshot.return_value = Snapshot(None, '"v1"', None)
+    await service.scan()
+    assert store.connection.execute("SELECT route FROM jobs").fetchone()[0] == route
+
+
+async def test_prune_drops_history_but_never_the_dedup_record(settings, store, company, job, clock):
+    service, _, providers = make_service(settings, store, [job])
+    await service.scan()
+    providers.fetch_snapshot.return_value = Snapshot([])
+    clock.set(store.board_state(company.key)["next_scan_at"])
+    await service.scan()
+
+    def count(table, where="1"):
+        return store.connection.execute(f"SELECT COUNT(*) FROM {table} WHERE {where}").fetchone()[0]
+
+    assert (count("jobs"), count("deliveries", "kind='job'")) == (1, 1)
+    assert store.prune(days=0) >= 1
+    assert count("jobs") == 0
+    assert count("deliveries", "kind='job'") == 1, "a sent delivery is what stops a repost"
+    assert count("scans") == 0
+
+
+async def test_prune_keeps_jobs_still_on_the_board(settings, store, company, job, clock):
+    service, _, _ = make_service(settings, store, [job])
+    await service.scan()
+    store.prune(days=0)
+    assert store.snapshot_jobs(company.key) == [replace(job, description="")]

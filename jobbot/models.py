@@ -76,6 +76,12 @@ class Job:
     def to_dict(self) -> dict:
         return asdict(self)
 
+    def stored(self) -> dict:
+        # Only classify() reads the description and no embed renders it, so persisting it
+        # would ship megabytes of dead text to Drive on every scan. The key is kept so
+        # Job(**stored) still round-trips.
+        return {**asdict(self), "description": ""}
+
 
 @dataclass(frozen=True)
 class Classification:

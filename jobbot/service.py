@@ -132,12 +132,12 @@ class Service:
                 jobs = []
                 if error is None:
                     try:
-                        jobs = (
-                            self.store.snapshot_jobs(company.key)
-                            if snapshot.jobs is None
-                            else snapshot.jobs
-                        )
-                        results = [(job, classify(job, company.overrides)) for job in jobs]
+                        if snapshot.jobs is None:
+                            results = self.store.snapshot_results(company.key)
+                            jobs = [job for job, _ in results]
+                        else:
+                            jobs = snapshot.jobs
+                            results = [(job, classify(job, company.overrides)) for job in jobs]
                         self.store.observe(company, results, self.settings.mode, snapshot)
                     except Exception as exc:
                         error = exc
@@ -188,6 +188,7 @@ class Service:
             backlog = self.store.backlog(self.settings.mode)
             self.store.finish_scan(scan_id, self.settings.mode, backlog)
             await self._send_pending("summary")
+            self.store.prune()
             log.info(
                 "Scan %s: boards_ok=%d boards_failed=%d jobs=%d sent=%d backlog=%d mode=%s",
                 scan_id,
