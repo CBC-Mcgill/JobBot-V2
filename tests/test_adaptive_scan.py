@@ -53,7 +53,7 @@ async def test_all_quiet_tiers_new_unrelated_and_qualifying_jobs(
     unrelated = replace(job, title="Marketing Intern")
     providers.fetch_snapshot.return_value = Snapshot([unrelated])
     await service.scan()
-    assert store.board_state(company.key)["scan_tier"] == 6
+    assert store.board_state(company.key)["scan_tier"] == len(DEFAULT_TIERS) - 1
     assert publisher.messages == []
     clock.set(store.board_state(company.key)["next_scan_at"])
     providers.fetch_snapshot.return_value = Snapshot([unrelated, another_job(job, 2)])
@@ -247,7 +247,9 @@ def test_status_matches_due_queue_and_excludes_disabled(store, company, clock):
     assert status["due_boards"] == 1
     assert status["failed_boards"] == 1
     assert status["next_board"]["key"] == company.key
-    assert [t["boards"] for t in status["boards_by_tier"]] == [2, 1, 0, 0, 0, 0, 0]
+    assert [t["boards"] for t in status["boards_by_tier"]] == [2, 1] + [0] * (
+        len(DEFAULT_TIERS) - 2
+    )
     assert store.scheduling_status(adaptive=False)["due_boards"] == 3
     clock.advance(1800)
     assert store.scheduling_status()["due_boards"] == 2

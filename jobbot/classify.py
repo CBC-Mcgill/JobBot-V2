@@ -1,9 +1,9 @@
 """Conservative, explainable rules; company overrides remain explicit opt-ins."""
 
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
-from .models import Classification, Job
+from .models import MAX_PUBLICATION_AGE, Classification, Job
 
 SENIOR = re.compile(
     r"\b(senior|sr\.?|staff|principal|lead|manager|director|head|vp|vice president)\b", re.I
@@ -38,8 +38,6 @@ NONTECH = re.compile(
     r"talent acquisition|administrative)\b",
     re.I,
 )
-
-MAX_PUBLICATION_AGE = timedelta(days=7)
 
 
 def is_stale(job: Job, reference: datetime | None = None) -> bool:

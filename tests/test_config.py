@@ -62,7 +62,7 @@ def test_adaptive_defaults_alias_and_precedence(scheduling_env, monkeypatch):
     settings = Settings.load(scheduling_env, discord_required=False)
     assert settings.adaptive_scheduling
     assert settings.scan_interval == settings.quiet_tiers[0] == 1800
-    assert settings.quiet_tiers[-1] == 2592000
+    assert settings.quiet_tiers[-1] == 259200
     assert settings.failure_retry == 1800
     assert settings.priority_scan_interval == 7200
     monkeypatch.setenv("SCAN_INTERVAL_SECONDS", "3600")

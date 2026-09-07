@@ -3,8 +3,13 @@
 import hashlib
 import json
 from dataclasses import asdict, dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+# A listing older than this is treated as filled and is never delivered.  Scheduling
+# depends on it too: a board re-checked less often than this window loses listings
+# outright, so the two policies must be derived from one constant.
+MAX_PUBLICATION_AGE = timedelta(days=7)
 
 
 def now() -> str:

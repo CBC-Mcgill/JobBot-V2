@@ -2,18 +2,47 @@ from dataclasses import replace
 
 import pytest
 
-from jobbot.models import Company
-from jobbot.scheduling import DEFAULT_TIERS, SchedulingPolicy, after, parse_priority_boards
+from jobbot.models import MAX_PUBLICATION_AGE, Company
+from jobbot.scheduling import (
+    DEFAULT_TIERS,
+    MAX_QUIET_INTERVAL,
+    SchedulingPolicy,
+    after,
+    bounded_tiers,
+    parse_priority_boards,
+)
 
 
-def test_quiet_tiers_reach_thirty_days_and_reset():
+def test_quiet_tiers_climb_to_the_ceiling_and_reset():
     policy = SchedulingPolicy()
     tier = 0
     for expected, delay in enumerate(DEFAULT_TIERS[1:], 1):
         tier, interval = policy.success(tier, False)
         assert (tier, interval) == (expected, delay)
-    assert policy.success(tier, False) == (6, 2592000)
+    assert policy.success(tier, False) == (len(DEFAULT_TIERS) - 1, DEFAULT_TIERS[-1])
     assert policy.success(tier, True) == (0, 1800)
+
+
+def test_no_tier_outlives_the_publication_freshness_window():
+    """A board slept past this window would classify its own new listings as stale,
+    which never counts as qualifying, so its tier would never reset.  Regression guard."""
+    window = MAX_PUBLICATION_AGE.total_seconds()
+    for tiers in (DEFAULT_TIERS, (1800, 604800, 2592000), (86400, 999999999)):
+        policy = SchedulingPolicy(tiers=tiers)
+        assert policy.tiers, "at least one tier must survive the ceiling"
+        assert max(policy.tiers) <= MAX_QUIET_INTERVAL < window
+        tier = 0
+        for _ in range(len(tiers) + 5):
+            tier, interval = policy.success(tier, False)
+            assert interval < window
+
+
+def test_over_generous_tiers_are_dropped_not_rejected():
+    # An unattended bot keeps scanning on a safe cadence rather than refusing to start.
+    assert bounded_tiers((1800, 604800, 2592000)) == (1800,)
+    assert bounded_tiers(DEFAULT_TIERS) == DEFAULT_TIERS
+    assert bounded_tiers((2592000,)) == (2592000,), "never return an empty ladder"
+    assert SchedulingPolicy(tiers=(1800, 7200, 2592000)).tiers == (1800, 7200)
 
 
 @pytest.mark.parametrize("priority", [1800, 7200])
