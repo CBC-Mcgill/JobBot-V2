@@ -6,9 +6,8 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-# A listing older than this is treated as filled and is never delivered.  Scheduling
-# depends on it too: a board re-checked less often than this window loses listings
-# outright, so the two policies must be derived from one constant.
+# Older listings are treated as filled. Scheduling derives its ceiling from this, so a
+# board is never re-checked less often than its own listings stay deliverable.
 MAX_PUBLICATION_AGE = timedelta(days=7)
 
 
