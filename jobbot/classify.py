@@ -57,6 +57,24 @@ def is_stale(job: Job, reference: datetime | None = None) -> bool:
     return reference - published > MAX_PUBLICATION_AGE
 
 
+def reapply(cached: Classification, job: Job, overrides: dict | None = None) -> Classification:
+    """Refresh a cached verdict against the inputs that change after a snapshot is parsed.
+
+    Board content is fixed by an HTTP 304, but the registry and the clock are not, so
+    exclusions, overrides, and staleness are all evaluated again.
+    """
+    overrides = overrides or {}
+    if overrides.get("exclude"):
+        return Classification(None, None, ("company exclusion",))
+    if is_stale(job):
+        return Classification(None, None, ("published more than seven days ago",))
+    return Classification(
+        overrides.get("kind", cached.kind),
+        overrides.get("experience", cached.experience),
+        cached.reasons,
+    )
+
+
 def classify(job: Job, overrides: dict | None = None) -> Classification:
     overrides = overrides or {}
     reasons = []

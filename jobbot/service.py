@@ -1,10 +1,11 @@
 import asyncio
 import json
 import logging
+import sqlite3
 from datetime import UTC, datetime
 from typing import Protocol
 
-from .classify import classify, is_stale
+from .classify import classify, is_stale, reapply
 from .config import Settings, read_registry
 from .discord_output import definitive_failure
 from .discovery import Discovery
@@ -133,7 +134,10 @@ class Service:
                 if error is None:
                     try:
                         if snapshot.jobs is None:
-                            results = self.store.snapshot_results(company.key)
+                            results = [
+                                (job, reapply(cached, job, company.overrides))
+                                for job, cached in self.store.snapshot_results(company.key)
+                            ]
                             jobs = [job for job, _ in results]
                         else:
                             jobs = snapshot.jobs
@@ -188,7 +192,12 @@ class Service:
             backlog = self.store.backlog(self.settings.mode)
             self.store.finish_scan(scan_id, self.settings.mode, backlog)
             await self._send_pending("summary")
-            self.store.prune()
+            try:
+                self.store.prune()
+            except sqlite3.Error as exc:
+                # Everything durable is already committed. Losing the scan here would
+                # discard the run and repost what it just sent.
+                log.warning("Retention pass skipped (%s)", type(exc).__name__)
             log.info(
                 "Scan %s: boards_ok=%d boards_failed=%d jobs=%d sent=%d backlog=%d mode=%s",
                 scan_id,

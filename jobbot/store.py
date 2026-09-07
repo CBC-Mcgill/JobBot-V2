@@ -1,7 +1,7 @@
 import json
 import sqlite3
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from .models import Classification, Company, Job, Snapshot, now
@@ -11,6 +11,9 @@ SCHEMA_VERSION = 2
 
 # Long enough that a seasonal role vanishing and returning is not treated as new.
 RETENTION_DAYS = 90
+# One scan row retires per scan in the steady state. Rewriting the whole file for
+# that would cost more than it reclaims, so wait for a real batch.
+VACUUM_ROWS = 1000
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS companies (
@@ -167,10 +170,11 @@ class Store:
         return [job for job, _ in self.snapshot_results(key)]
 
     def snapshot_results(self, key: str) -> list[tuple[Job, Classification]]:
-        """Replay a cached snapshot with the verdict recorded when it was first parsed.
+        """Replay a cached snapshot with the verdict recorded when it was parsed.
 
-        An HTTP 304 means nothing changed, so re-deriving the verdict would only risk
-        disagreeing with it. Descriptions are not persisted and cannot be re-read anyway.
+        Descriptions are not persisted, so a 304 cannot re-derive a verdict that the
+        description earned. Callers must pass the result through classify.reapply to
+        pick up registry and staleness changes since.
         """
         results = []
         for row in self.connection.execute(
@@ -479,8 +483,10 @@ class Store:
     def sent(self, delivery_id: str, message_id: int) -> None:
         with self.connection:
             self.connection.execute(
-                "UPDATE deliveries SET status='sent',message_id=?,sent_at=?,last_error=NULL "
-                "WHERE id=?",
+                # The payload has been rendered and will not be again, but the row stays:
+                # it is what stops a repost if the job reappears on a board.
+                "UPDATE deliveries SET status='sent',message_id=?,sent_at=?,last_error=NULL,"
+                "payload='{}' WHERE id=?",
                 (message_id, now(), delivery_id),
             )
 
@@ -510,7 +516,7 @@ class Store:
         Deliveries are never pruned: a sent row is what stops a job being posted twice
         if it reappears on a board, so it outlives the job row it points at.
         """
-        cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+        cutoff = (datetime.fromisoformat(now()) - timedelta(days=days)).isoformat()
         with self.connection:
             removed = self.connection.execute(
                 "DELETE FROM jobs WHERE active=0 AND last_seen<?", (cutoff,)
@@ -518,8 +524,9 @@ class Store:
             removed += self.connection.execute(
                 "DELETE FROM scans WHERE status='finished' AND started_at<?", (cutoff,)
             ).rowcount
-        if removed:
-            # Freed pages are only returned to the file, and so to the Drive upload, by VACUUM.
+        if removed >= VACUUM_ROWS:
+            # Deleted pages are only returned to the file, and so to the Drive upload, by
+            # VACUUM. It rewrites everything, so it is worth doing only in batches.
             self.connection.execute("VACUUM")
         return removed
 
