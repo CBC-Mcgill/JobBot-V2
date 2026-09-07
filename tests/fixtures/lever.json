@@ -1,0 +1,13 @@
+[
+  {
+    "id": "abc",
+    "text": "Quantitative Research Intern",
+    "categories": {"location": "London", "allLocations": ["London", "Paris"], "commitment": "Intern"},
+    "descriptionPlain": "Research quantitative models.",
+    "lists": [{"text": "Requirements", "content": "<li>Python</li>"}],
+    "hostedUrl": "https://jobs.eu.lever.co/example/abc",
+    "applyUrl": "https://jobs.eu.lever.co/example/abc/apply",
+    "salaryRange": {"currency": "GBP", "min": 30, "max": 40, "interval": "per-hour"},
+    "createdAt": 1767225600000
+  }
+]

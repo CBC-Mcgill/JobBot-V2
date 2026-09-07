@@ -1,0 +1,15 @@
+services:
+  jobbot:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_PATH: /app/data/jobs.sqlite3
+      COMPANY_REGISTRY: /app/config/companies.json
+      DISCOVERY_SOURCES: /app/config/discovery.json
+    volumes:
+      - jobbot-data:/app/data
+      - ./config:/app/config:ro
+    stop_grace_period: 25s
+volumes:
+  jobbot-data:

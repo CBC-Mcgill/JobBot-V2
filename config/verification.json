@@ -1,0 +1,17 @@
+{
+  "checked_at": "2026-09-06T22:30:42.278463+00:00",
+  "candidates": 1783,
+  "verified": 1715,
+  "providers": {
+    "ashby": 593,
+    "greenhouse": 792,
+    "lever": 330
+  },
+  "sources": [
+    "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json",
+    "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/.github/scripts/listings.json",
+    "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/README.md",
+    "https://raw.githubusercontent.com/SimplifyJobs/Summer2027-Internships/dev/README.md",
+    "https://raw.githubusercontent.com/SimplifyJobs/Summer2026-Internships/dev/README.md"
+  ]
+}

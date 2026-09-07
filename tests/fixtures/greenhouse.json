@@ -1,0 +1,14 @@
+{
+  "jobs": [
+    {
+      "id": 123,
+      "title": "Software Engineer - New Grad",
+      "absolute_url": "https://job-boards.greenhouse.io/example/jobs/123",
+      "content": "<p>Annual salary: USD 90,000 - 110,000 per year.</p>",
+      "location": {"name": "New York"},
+      "updated_at": "2026-01-01T00:00:00Z",
+      "departments": [{"name": "Engineering"}]
+    }
+  ],
+  "meta": {"total": 1}
+}
