@@ -1,6 +1,7 @@
 """Conservative, explainable rules; company overrides remain explicit opt-ins."""
 
 import re
+from datetime import UTC, datetime, timedelta
 
 from .models import Classification, Job
 
@@ -38,12 +39,31 @@ NONTECH = re.compile(
     re.I,
 )
 
+MAX_PUBLICATION_AGE = timedelta(days=7)
+
+
+def is_stale(job: Job, reference: datetime | None = None) -> bool:
+    """Return whether a listing has a trustworthy publication date over one week old."""
+    if not job.published_at:
+        return False
+    try:
+        published = datetime.fromisoformat(job.published_at.replace("Z", "+00:00"))
+    except ValueError:
+        # Some providers do not expose a dependable date. Do not mistake an
+        # unparseable value for evidence that a listing is old.
+        return False
+    published = published.replace(tzinfo=published.tzinfo or UTC)
+    reference = reference or datetime.now(UTC)
+    return reference - published > MAX_PUBLICATION_AGE
+
 
 def classify(job: Job, overrides: dict | None = None) -> Classification:
     overrides = overrides or {}
     reasons = []
     if overrides.get("exclude"):
         return Classification(None, None, ("company exclusion",))
+    if is_stale(job):
+        return Classification(None, None, ("published more than seven days ago",))
     title = job.title.replace("–", "-").replace("—", "-")
     description = job.description
     if SENIOR.search(title):

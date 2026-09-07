@@ -429,6 +429,14 @@ class Store:
             )
         ]
 
+    def cancel(self, delivery_id: str) -> None:
+        """Cancel a pending delivery that no longer meets publication policy."""
+        with self.connection:
+            self.connection.execute(
+                "UPDATE deliveries SET status='cancelled' WHERE id=? AND status='pending'",
+                (delivery_id,),
+            )
+
     def uncertain(self, mode: str) -> list[dict]:
         return [
             dict(r)

@@ -1,4 +1,5 @@
 from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -47,6 +48,16 @@ def test_quant_company_does_not_force_software_into_quant(job):
     assert result.kind == "Quant"
     assert "company type override" in result.reasons
     assert not classify(job, {"exclude": True}).eligible
+
+
+def test_week_old_listing_is_not_eligible(job):
+    reference = datetime.now(UTC)
+    recent = replace(job, published_at=(reference - timedelta(days=6)).isoformat())
+    stale = replace(job, published_at=(reference - timedelta(days=8)).isoformat())
+
+    assert classify(recent).eligible
+    assert not classify(stale).eligible
+    assert classify(stale).reasons == ("published more than seven days ago",)
 
 
 def test_canonical_application_url():

@@ -1,22 +1,20 @@
-name: Job bot
+name: Discover job boards
 
 on:
   schedule:
-    - cron: "*/30 * * * *"
+    - cron: "17 3 * * *"
   workflow_dispatch:
 
-# A small manifest is committed after each successful scan. The SQLite payload
-# itself lives in a private Google Drive folder.
 permissions:
   contents: write
 
-# A SQLite file cannot be merged. Serialize manual and scheduled invocations.
+# Share the scan workflow's lock: both update the same SQLite file.
 concurrency:
   group: jobbot-database
   cancel-in-progress: false
 
 jobs:
-  scan:
+  discover:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -68,6 +66,7 @@ jobs:
             echo "No manifest yet; initializing a new database."
           fi
       - run: jobbot check-config
+      - run: jobbot discover
       - run: jobbot scan
       - name: Publish database state
         env:
@@ -88,7 +87,7 @@ jobs:
           if ! git diff --cached --quiet; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "chore: persist job bot state"
+            git commit -m "chore: persist discovered job boards"
             git push
           fi
           python -m jobbot.drive_state retained-paths state/current.json > "$RUNNER_TEMP/retained-paths"

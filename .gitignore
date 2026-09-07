@@ -7,5 +7,8 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 data/
+state/*.sqlite3
+state/*.sqlite3-*
+state/*.lock
 build/
 dist/

@@ -52,6 +52,26 @@ jobbot backup backup.sqlite3
 
 `make lint` and `make test` run the project checks. Never commit `.env`, the SQLite database, or backups.
 
+## GitHub Actions state storage
+
+Scheduled workflows store the SQLite payload in a **private** Google Drive folder. Git commits only
+`state/current.json`, a checksum-verified manifest that identifies the current immutable Drive object
+and one fallback. This avoids Git's binary-file limits while preserving delivery history between fresh
+GitHub-hosted runners.
+
+Create a dedicated Google account and private empty Drive folder for this purpose. Configure an rclone
+remote named `gdrive` using that folder as its `root_folder_id`, preferably with the `drive.file` scope,
+then save its complete rclone configuration as the repository Actions secret `RCLONE_CONFIG_GDRIVE`.
+On a trusted local machine, run `rclone config`, create the `gdrive` remote, select Google Drive and the
+`drive.file` scope, authorize it in a browser, then copy `rclone config show gdrive` into that secret.
+The configuration contains a refresh token: never commit it or place it in `.env`.
+The workflows install rclone, restore the manifest's object before scanning, upload a new object, commit
+the new manifest, then permanently remove Drive objects beyond the current and fallback snapshots.
+
+Do not make the folder public or grant it public edit access: someone could replace or erase the delivery
+history and cause duplicate posts. The first successful scheduled run creates the manifest and its first
+remote database automatically.
+
 ## Board list and scheduling
 
 `config/companies.json` is the checked-in board registry. It currently contains Ashby, Greenhouse, and Lever boards sourced from SimplifyJobs’ public new-grad and internship trackers. `config/discovery.json` lists the public source pages used to discover additions.

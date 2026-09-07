@@ -23,3 +23,8 @@ With adaptive scheduling enabled, quiet boards progress through the configured `
 The manual registry is synchronized when its file changes. Removing a manual board disables it while retaining history; discovered boards and history are never deleted by that sync. Discovery reads a list of public source URLs, extracts supported boards, validates each one, and records failures for status reporting.
 
 SQLite databases created by schema v1 migrate in place to v2 without losing jobs, deliveries, scans, or discovery records. `jobbot backup` uses SQLite's backup API so a live WAL database is captured consistently.
+
+When scheduled through GitHub Actions, the database payload is stored as a checksum-verified immutable
+object in a private Google Drive folder. Git tracks a manifest for the current object and one fallback;
+the workflow uploads an object before committing its manifest, so an interrupted publish leaves the last
+committed state available.

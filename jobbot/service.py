@@ -1,13 +1,14 @@
 import asyncio
+import json
 import logging
 from datetime import UTC, datetime
 from typing import Protocol
 
-from .classify import classify
+from .classify import classify, is_stale
 from .config import Settings, read_registry
 from .discord_output import definitive_failure
 from .discovery import Discovery
-from .models import Company, Snapshot, now
+from .models import Company, Job, Snapshot, now
 from .store import Store
 
 log = logging.getLogger(__name__)
@@ -160,6 +161,9 @@ class Service:
         limit = self.settings.max_send if kind == "job" else 100
         delivered = 0
         for delivery in self.store.pending(self.settings.mode, kind, limit):
+            if kind == "job" and is_stale(Job(**json.loads(delivery["payload"]))):
+                self.store.cancel(delivery["id"])
+                continue
             delivered += await self.send(delivery, scan_id)
         return delivered
 
