@@ -62,7 +62,7 @@ jobs:
           mkdir -p state
           if [ -f state/current.json ]; then
             remote_path="$(python -m jobbot.drive_state current-path state/current.json)"
-            rclone copyto "gdrive:$remote_path" "$DATABASE_PATH" --checksum
+            rclone copyto "CBC:$remote_path" "$DATABASE_PATH" --checksum
             python -m jobbot.drive_state verify state/current.json "$DATABASE_PATH"
           else
             echo "No manifest yet; initializing a new database."
@@ -81,7 +81,7 @@ jobs:
           next_manifest="$RUNNER_TEMP/current.json"
           python -m jobbot.drive_state next-manifest state/current.json "$DATABASE_PATH" > "$next_manifest"
           remote_path="$(python -m jobbot.drive_state current-path "$next_manifest")"
-          rclone copyto "$DATABASE_PATH" "gdrive:$remote_path" --checksum
+          rclone copyto "$DATABASE_PATH" "CBC:$remote_path" --checksum
           python -m jobbot.drive_state verify "$next_manifest" "$DATABASE_PATH"
           mv "$next_manifest" state/current.json
           git add state/current.json
@@ -96,8 +96,8 @@ jobs:
             case "$remote_path" in
               jobs-*.sqlite3)
                 if ! grep --fixed-strings --line-regexp --quiet "$remote_path" "$RUNNER_TEMP/retained-paths"; then
-                  rclone deletefile "gdrive:$remote_path" --drive-use-trash=false
+                  rclone deletefile "CBC:$remote_path" --drive-use-trash=false
                 fi
                 ;;
             esac
-          done < <(rclone lsf gdrive: --files-only)
+          done < <(rclone lsf CBC: --files-only)
