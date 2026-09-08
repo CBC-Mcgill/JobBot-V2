@@ -1,0 +1,10 @@
+{
+  "objects": [
+    {
+      "path": "jobs-6aaf84cdef1d905d0377a563c17dd1eed4f86a800c1fde6e080bef1805e6ad6a.sqlite3",
+      "sha256": "6aaf84cdef1d905d0377a563c17dd1eed4f86a800c1fde6e080bef1805e6ad6a",
+      "size": 90697728
+    }
+  ],
+  "schema_version": 1
+}
