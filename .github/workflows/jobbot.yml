@@ -23,7 +23,7 @@ jobs:
       DATABASE_PATH: state/jobs.sqlite3
       COMPANY_REGISTRY: config/companies.json
       DISCOVERY_SOURCES: config/discovery.json
-      DEBUG: "true"
+      DEBUG: "false"
       DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
       SWE_INTERNS: ${{ secrets.SWE_INTERNS }}
       SWE_NG: ${{ secrets.SWE_NG }}
