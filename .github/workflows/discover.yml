@@ -16,7 +16,7 @@ concurrency:
 jobs:
   discover:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       DATABASE_PATH: state/jobs.sqlite3
       COMPANY_REGISTRY: config/companies.json
@@ -67,7 +67,6 @@ jobs:
           fi
       - run: jobbot check-config
       - run: jobbot discover
-      - run: jobbot scan
       - name: Publish database state
         env:
           RCLONE_CONFIG_GDRIVE: ${{ secrets.RCLONE_CONFIG_GDRIVE }}
