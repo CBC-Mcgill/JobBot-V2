@@ -82,6 +82,16 @@ def test_absent_compensation_keeps_embed_compact(job, settings):
     assert not embed.fields
 
 
+def test_malformed_publication_date_omits_timestamp(job, settings):
+    delivery = {
+        "id": "abc",
+        "kind": "job",
+        "route": "SWE_Intern",
+        "payload": json.dumps(replace(job, published_at="not-a-date").to_dict()),
+    }
+    assert make_message(delivery, settings)["embed"].timestamp is None
+
+
 def heading_for(job, settings, company):
     delivery = {
         "id": "abc",

@@ -16,6 +16,10 @@ Each listing has a persistent identity and delivery history. Debug and productio
 
 Every successful provider response is parsed as a complete snapshot. A changed board updates jobs, qualification, and pending delivery state together. An HTTP 304 reuses the prior complete snapshot. Failed, invalid, or incomplete responses preserve the previous snapshot and validators.
 
+Changing a board's classification overrides invalidates its HTTP validators and schedules an immediate full refresh. Cached jobs are held until that refresh succeeds, so a failed refresh cannot publish a superseded verdict. Cached reclassification applies the same senior-title and unrelated-occupation exclusions as a fresh response. Removing a company exclusion cancels pending jobs immediately; sent history and uncertain sends remain durable.
+
+If a provider replaces a posting ID while retaining the same application identity, a cancelled, never-sent delivery is reassigned to the replacement. Sent deliveries remain deduplicated, and uncertain deliveries remain subject to Discord history reconciliation. Malformed publication dates are treated as unknown and omit the embed timestamp.
+
 With adaptive scheduling enabled, quiet boards progress through the configured `QUIET_TIERS_SECONDS` intervals (defaults: 30 minutes through 3 days). A genuinely new qualifying listing resets a board to the first tier. No tier may exceed half the seven-day publication-freshness window, so a sleeping board is always re-checked while its listings are still deliverable. Tiers configured beyond that ceiling are dropped. Failures retry with bounded backoff. Priority boards use their configured interval; Nvidia and Amazon are pinned only when actually present in the registry. `ADAPTIVE_SCHEDULING=false` fetches all enabled boards each loop. `ACTIVE_SCAN_INTERVAL_SECONDS` overrides the legacy `SCAN_INTERVAL_SECONDS` alias.
 
 ## Registry, discovery, and persistence

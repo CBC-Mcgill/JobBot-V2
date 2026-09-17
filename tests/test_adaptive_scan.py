@@ -372,6 +372,40 @@ async def test_304_reapplies_company_exclusion(settings, store, company, job, cl
     ).fetchone()[0] == "sent"
 
 
+async def test_override_change_invalidates_validators_and_refetches(
+    settings, store, company, job, clock
+):
+    excluded = replace(company, overrides={"exclude": True})
+    settings.registry_path.write_text(json.dumps([excluded.to_dict()]))
+    service, publisher, providers = make_service(settings, store, [job])
+    providers.fetch_snapshot.return_value = Snapshot([job], '"v1"')
+    await service.scan()
+    assert publisher.messages == []
+    settings.registry_path.write_text(json.dumps([company.to_dict()]))
+    service._registry_signature = None
+    providers.fetch_snapshot.return_value = Snapshot([job])
+    clock.set(store.board_state(company.key)["next_scan_at"])
+    await service.scan()
+    providers.fetch_snapshot.assert_awaited_with(company, etag=None, last_modified=None)
+    assert [message[0]["kind"] for message in publisher.messages] == ["job", "summary"]
+
+
+async def test_override_change_failed_refresh_does_not_publish_cached_job(
+    settings, store, company, job, clock
+):
+    service, publisher, providers = make_service(settings, store, [job])
+    await service.scan()
+    assert len(publisher.messages) == 2
+    excluded = replace(company, overrides={"exclude": True})
+    settings.registry_path.write_text(json.dumps([excluded.to_dict()]))
+    service._registry_signature = None
+    providers.fetch_snapshot.side_effect = TimeoutError()
+    clock.set(store.board_state(company.key)["next_scan_at"])
+    await service.scan()
+    assert store.connection.execute("SELECT route FROM jobs").fetchone()[0] is None
+    assert store.backlog("debug") == 0
+
+
 async def test_304_reapplies_staleness_instead_of_requeuing_forever(
     settings, store, company, job, clock
 ):

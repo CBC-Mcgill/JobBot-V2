@@ -15,6 +15,17 @@ def now() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def parse_publication_date(value: str | None) -> datetime | None:
+    """Parse a provider publication date, returning ``None`` for unknown dates."""
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except (AttributeError, TypeError, ValueError):
+        return None
+    return parsed.replace(tzinfo=parsed.tzinfo or UTC)
+
+
 def canonical_url(url: str) -> str:
     """Normalize application URLs for durable cross-provider deduplication."""
     parts = urlsplit(url)

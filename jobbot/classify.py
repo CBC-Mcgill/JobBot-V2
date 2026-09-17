@@ -3,7 +3,7 @@
 import re
 from datetime import UTC, datetime
 
-from .models import MAX_PUBLICATION_AGE, Classification, Job
+from .models import MAX_PUBLICATION_AGE, Classification, Job, parse_publication_date
 
 SENIOR = re.compile(
     r"\b(senior|sr\.?|staff|principal|lead|manager|director|head|vp|vice president)\b", re.I
@@ -44,13 +44,11 @@ def is_stale(job: Job, reference: datetime | None = None) -> bool:
     """Return whether a listing has a trustworthy publication date over one week old."""
     if not job.published_at:
         return False
-    try:
-        published = datetime.fromisoformat(job.published_at.replace("Z", "+00:00"))
-    except ValueError:
+    published = parse_publication_date(job.published_at)
+    if published is None:
         # Some providers do not expose a dependable date. Do not mistake an
         # unparseable value for evidence that a listing is old.
         return False
-    published = published.replace(tzinfo=published.tzinfo or UTC)
     reference = reference or datetime.now(UTC)
     return reference - published > MAX_PUBLICATION_AGE
 
@@ -66,6 +64,11 @@ def reapply(cached: Classification, job: Job, overrides: dict | None = None) -> 
         return Classification(None, None, ("company exclusion",))
     if is_stale(job):
         return Classification(None, None, ("published more than seven days ago",))
+    title = job.title.replace("–", "-").replace("—", "-")
+    if SENIOR.search(title):
+        return Classification(None, None, ("senior title",))
+    if NONTECH.search(title):
+        return Classification(None, None, ("unrelated occupation",))
     return Classification(
         overrides.get("kind", cached.kind),
         overrides.get("experience", cached.experience),

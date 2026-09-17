@@ -60,10 +60,10 @@ and one fallback. This avoids Git's binary-file limits while preserving delivery
 GitHub-hosted runners.
 
 Create a dedicated Google account and private empty Drive folder for this purpose. Configure an rclone
-remote named `gdrive` using that folder as its `root_folder_id`, preferably with the `drive.file` scope,
+remote named `CBC` using that folder as its `root_folder_id`, preferably with the `drive.file` scope,
 then save its complete rclone configuration as the repository Actions secret `RCLONE_CONFIG_GDRIVE`.
-On a trusted local machine, run `rclone config`, create the `gdrive` remote, select Google Drive and the
-`drive.file` scope, authorize it in a browser, then copy `rclone config show gdrive` into that secret.
+On a trusted local machine, run `rclone config`, create the `CBC` remote, select Google Drive and the
+`drive.file` scope, authorize it in a browser, then copy `rclone config show CBC` into that secret.
 The configuration contains a refresh token: never commit it or place it in `.env`.
 The workflows install rclone, restore the manifest's object before scanning, upload a new object, commit
 the new manifest, then permanently remove Drive objects beyond the current and fallback snapshots.

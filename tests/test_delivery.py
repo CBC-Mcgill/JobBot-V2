@@ -175,6 +175,19 @@ def test_canonical_url_dedup_and_changed_url_no_repost(store, company, job):
     assert store.backlog("debug") == 0
 
 
+def test_cancelled_never_sent_delivery_follows_replacement_id(store, company, job):
+    store.upsert_company(company)
+    store.observe(company, [(job, classify(job))], "debug")
+    original = store.pending("debug", "job")[0]
+    store.cancel(original["id"])
+    replacement = replace(job, remote_id="replacement")
+    store.observe(company, [(replacement, classify(replacement))], "debug")
+    queued = store.pending("debug", "job")[0]
+    assert queued["id"] == original["id"]
+    assert queued["job_key"] == replacement.key
+    assert store.connection.execute("SELECT COUNT(*) FROM deliveries").fetchone()[0] == 1
+
+
 def test_sqlite_backup_includes_wal(settings, store, company, job, tmp_path):
     store.upsert_company(company)
     store.observe(company, [(job, classify(job))], "debug")

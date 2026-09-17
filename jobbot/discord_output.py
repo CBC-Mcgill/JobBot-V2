@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 import discord
 
 from .config import Settings
-from .models import Job
+from .models import Job, parse_publication_date
 
 COLORS = {"SWE": 0x5865F2, "Quant": 0xF1C40F, "AI/ML": 0x1ABC9C}
 ICONS = {"SWE": "💻", "Quant": "📈", "AI/ML": "🧠"}
@@ -42,11 +42,7 @@ def make_message(delivery: dict, settings: Settings) -> dict:
             url=job.url,
             color=COLORS[kind],
             description="\n".join(details),
-            timestamp=(
-                datetime.fromisoformat(job.published_at.replace("Z", "+00:00"))
-                if job.published_at
-                else None
-            ),
+            timestamp=parse_publication_date(job.published_at),
         )
         footer = f"{kind} · {experience}  •  {job.provider.title()}  •  {marker(delivery['id'])}"
         intended = settings.channels[delivery["route"]]

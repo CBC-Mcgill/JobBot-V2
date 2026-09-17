@@ -225,6 +225,10 @@ class Store:
     def sync_registry(self, companies: list[Company]) -> None:
         """Apply manual registry changes without deleting jobs or delivery history."""
         keys = {c.key for c in companies}
+        previous = {
+            row["key"]: Company(**json.loads(row["data"]))
+            for row in self.connection.execute("SELECT key,data FROM companies WHERE manual=1")
+        }
         # Removing a manual registry entry disables it without deleting delivery history.
         for row in self.connection.execute(
             "SELECT key,data FROM companies WHERE manual=1"
@@ -237,6 +241,26 @@ class Store:
             self.upsert_company(company)
         self.configure_scheduling(self.policy)
         with self.connection:
+            changed_overrides = [
+                company.key
+                for company in companies
+                if company.key in previous and previous[company.key].overrides != company.overrides
+            ]
+            for key in changed_overrides:
+                self.connection.execute(
+                    "UPDATE companies SET etag=NULL,last_modified=NULL,next_scan_at=? WHERE key=?",
+                    (now(), key),
+                )
+                self.connection.execute(
+                    "UPDATE jobs SET route=NULL,classification=? WHERE company_key=? AND active=1",
+                    (json.dumps(["classification override changed"]), key),
+                )
+                self.connection.execute(
+                    """UPDATE deliveries SET status='cancelled'
+                    WHERE kind='job' AND status='pending'
+                    AND job_key IN (SELECT key FROM jobs WHERE company_key=?)""",
+                    (key,),
+                )
             self.connection.execute(
                 """UPDATE deliveries SET status='cancelled' WHERE kind='job' AND status='pending'
                 AND job_key IN (SELECT j.key FROM jobs j JOIN companies c ON c.key=j.company_key
@@ -363,6 +387,20 @@ class Store:
             "SELECT id FROM deliveries WHERE mode=? AND kind='job' AND job_key=?",
             (mode, job.key),
         ).fetchone()
+        if existing:
+            return
+        replacement = self.connection.execute(
+            """SELECT id FROM deliveries WHERE mode=? AND kind='job' AND identity=?
+            AND status='cancelled' AND message_id IS NULL""",
+            (mode, job.identity),
+        ).fetchone()
+        if replacement:
+            self.connection.execute(
+                """UPDATE deliveries SET job_key=?,route=?,payload=?,status='pending'
+                WHERE id=?""",
+                (job.key, route, json.dumps(job.stored()), replacement["id"]),
+            )
+            return
         if not existing:
             self.connection.execute(
                 """INSERT OR IGNORE INTO deliveries
